@@ -47,8 +47,8 @@ def test_step(model, dataloader, loss_fn, device):
 
     return running_loss / len(dataloader), acc / len(dataloader), f1 / len(dataloader)
 
-def plot_confusion_matrix(pred, labels, classes):
-    cm = confusion_matrix(labels, pred)
+def plot_confusion_matrix(pred, labels, classes, normalize=None):
+    cm = confusion_matrix(labels, pred, normalize=normalize)
 
     fig, ax = plt.subplots()
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
@@ -62,7 +62,7 @@ def plot_confusion_matrix(pred, labels, classes):
     
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
-    fmt = 'd'
+    fmt = '.3f' if normalize is not None else 'd'
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
@@ -70,15 +70,21 @@ def plot_confusion_matrix(pred, labels, classes):
                     ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
+
+    if normalize:
+        title = 'Recall' if normalize == 'true' else 'Precision'
+    else:
+        title = 'Unnormalized'
+    plt.title(f"Confusion matrix ({title})")
     return fig, ax
 
-def create_confusion_matix(model, dataloader, class_labels, dst, device):
+def create_confusion_matix(model, dataloader, class_labels, dst, device, normalize=None):
     print("Generating confusion matrix...")
     all_pred = []
     all_labels = []
 
     model.eval()
-    for i, (X, y) in enumerate(tqdm(dataloader)):
+    for i, (X, y, _) in enumerate(tqdm(dataloader)):
         X = X.to(device)
     
         pred = model(X)
@@ -88,5 +94,5 @@ def create_confusion_matix(model, dataloader, class_labels, dst, device):
         all_pred += pred
         all_labels += y.tolist()
 
-    fig, ax = plot_confusion_matrix(all_pred, all_labels, classes=class_labels)
+    fig, ax = plot_confusion_matrix(all_pred, all_labels, classes=class_labels, normalize=normalize)
     fig.savefig(dst)

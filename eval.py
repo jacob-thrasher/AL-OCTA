@@ -14,18 +14,16 @@ from collections import OrderedDict
 
 torch.manual_seed(69)
 
+path = 'figures/weighted'
 dim = 299
-pretrained_model_path = 'figures/inception_v3_4-class/best_model.pt'
+pretrained_model_path = os.path.join(path, 'best_model.pt')
 
 
 root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'train.csv'), oversample=False, dim=dim, binary=False)
-valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'valid.csv'), dim=dim, binary=False)
+
 test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'test.csv'), dim=dim, binary=False)
 
 batch_size = 64
-train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-valid_dataloader = DataLoader(valid_dataset, batch_size=32, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
 
 model = torch.hub.load('pytorch/vision:v0.10.0', 'inception_v3', pretrained=True)
@@ -53,7 +51,9 @@ loss_fn = nn.CrossEntropyLoss()
 _, acc, f1 = test_step(model, test_dataloader, loss_fn, device)
 print(acc, f1)
 
-create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'],'figures/inception_v3_4-class/cm.png', device)
+create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm.png'), device, normalize=None)
+create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm_recall.png'), device, normalize='true')
+create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm_prec.png'), device, normalize='pred')
 
 # plt.hist(arr, bins=100)
 # plt.show()

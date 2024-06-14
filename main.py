@@ -13,7 +13,7 @@ from network import SimpleCNN
 
 torch.manual_seed(69)
 
-exp_id = 'AL_exp1'
+exp_id = 'weighted'
 dim = 299
 model_name = 'inception_v3'
 
@@ -23,9 +23,9 @@ else:
     raise OSError(f'Directory {exp_id} already exists')
 
 root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_train.csv'), oversample=False, dim=dim, binary=False)
-valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_valid.csv'), dim=dim, binary=False)
-test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)
+train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'train.csv'), oversample=False, dim=dim, binary=False)
+valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'valid.csv'), dim=dim, binary=False)
+test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'test.csv'), dim=dim, binary=False)
 
 batch_size = 64
 train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
@@ -45,7 +45,9 @@ device = 'cuda'
 print(f'Using {device}')
 model.to(device)
 
-loss_fn = CrossEntropyLoss()
+weights = torch.tensor([1/127, 1/5, 1/4, 1/23]).to(device)
+weights = weights / torch.sum(weights)
+loss_fn = CrossEntropyLoss(weight=weights)
 # loss_fn = BCEWithLogitsLoss()
 optim = Adam(model.parameters(), lr=2e-5)
 # optim = RMSprop(model.parameters(), lr=0.0001)

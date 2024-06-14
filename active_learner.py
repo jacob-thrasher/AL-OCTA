@@ -122,6 +122,7 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
 torch.manual_seed(69)
 
 root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
+dst = 'figures/AL2'
 
 dim = 299
 al_iter = 10
@@ -135,8 +136,8 @@ for i in range(al_iter):
     print(f"STARTING AL ITERATION {i}")
     print(f"-------------------------")
 
-    if not os.path.exists(f'figures/AL/iter_{i}'):
-        os.mkdir(os.path.join('figures/AL', f'iter_{i}'))
+    if not os.path.exists(f'{dst}/iter_{i}'):
+        os.mkdir(os.path.join(dst, f'iter_{i}'))
     else:
         raise OSError(f'Directory iter_{i} already exists')
 
@@ -178,7 +179,7 @@ for i in range(al_iter):
         if f1 >= best_f1:
             best_acc = acc
             best_f1 = f1
-            torch.save(model.state_dict(), f'figures/AL/iter_{i}/best_model.pt')
+            torch.save(model.state_dict(), f'{dst}/iter_{i}/best_model.pt')
 
 
         print('Train loss:', train_loss)
@@ -193,7 +194,7 @@ for i in range(al_iter):
         plt.title('Train and validation loss')
         plt.xlabel('Epoch')
         plt.legend()
-        plt.savefig(f'figures/AL/iter_{i}/loss.png')
+        plt.savefig(f'{dst}/iter_{i}/loss.png')
         plt.close()
 
         plt.plot(accs, color='green', label='Accuracy')
@@ -201,13 +202,13 @@ for i in range(al_iter):
         plt.title('Metrics over time')
         plt.xlabel('Epoch')
         plt.legend()
-        plt.savefig(f'figures/AL/iter_{i}/acc_f1.png')
+        plt.savefig(f'{dst}/iter_{i}/acc_f1.png')
         plt.close()
 
     print('-----------')
     print("Best Acc:", best_acc)
     print("Best F1 :", best_f1)
-    update_splits(root, f'figures/AL/iter_{i}/best_model.pt', device=device, n_transfer=n_transfer)
+    update_splits(root, f'{dst}/iter_{i}/best_model.pt', device=device, n_transfer=n_transfer)
 
 
 
