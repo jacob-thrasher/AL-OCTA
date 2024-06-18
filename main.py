@@ -13,7 +13,7 @@ from network import SimpleCNN
 
 torch.manual_seed(69)
 
-exp_id = 'weighted'
+exp_id = 'AutoAug'
 dim = 299
 model_name = 'inception_v3'
 
@@ -54,7 +54,7 @@ optim = Adam(model.parameters(), lr=2e-5)
 # optim = SGD(model.parameters(), lr=1e-4)
 
 
-epochs = 5
+epochs = 10
 
 best_acc = 0
 best_f1 = 0

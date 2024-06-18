@@ -11,6 +11,42 @@ from torch import nn
 from torch.utils.data import DataLoader
 from utils import train_step, test_step
 from collections import OrderedDict
+from temp_scaling import ModelWithTemperature
+
+def undersample(root, pids):
+    al_train = pd.read_csv(os.path.join(root, 'AL_train_update.csv'))
+    al_valid = pd.read_csv(os.path.join(root, 'AL_valid_update.csv'))
+
+    transfer_rows = al_valid[al_valid['ID'].isin(pids)]
+    al_train = pd.concat([al_train, transfer_rows], ignore_index=True) # Move rows to train set
+    al_valid.drop(index=transfer_rows.index, inplace=True)
+
+    assert len(set(al_train['ID'].tolist()).intersection(set(al_valid['ID'].tolist()))) == 0, f'Found overlap in train and validation set!!'
+
+    al_train.to_csv(os.path.join(root, 'AL_train_update.csv'), index=False)
+    al_valid.to_csv(os.path.join(root, 'AL_valid_update.csv'), index=False)
+
+def oversample(root, least_conf_class):
+    class_lookup = {
+        '0': 'NORMAL',
+        '1': 'AMD',
+        '2': 'CNV',
+        '3': 'DR'
+    }
+    disease = class_lookup[str(least_conf_class)]
+
+    al_train = pd.read_csv(os.path.join(root, 'AL_train_update.csv'))
+    subjects = al_train[al_train['Disease'] == disease]
+    subjects = subjects[~subjects.duplicated(keep=False)] # Drop already oversampled subjects
+
+    if len(subjects) == 0: return # Do nothing
+
+    selected = subjects.sample()
+
+    al_train = pd.concat([al_train, selected], ignore_index=True)
+    al_train.to_csv(os.path.join(root, 'AL_train_update.csv'), index=False)
+
+
 
 
 def update_splits(root, model_path, n_transfer=2, device='cuda'):
@@ -33,7 +69,12 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
     model.eval()
 
     valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_valid_update.csv'), dim=dim, binary=False)
+    test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)
     valid_dataloader = DataLoader(valid_dataset, batch_size=32, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+
+    scaled_model = ModelWithTemperature(model)
+    scaled_model.set_temperature(test_dataloader)
 
     class_conf = {
         '0': {
@@ -62,7 +103,7 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
 
         out = model(X)
 
-        probs = nn.functional.softmax(out, dim=1).detach().cpu()
+        probs = nn.functional.softmax(out / scaled_model.temperature, dim=1).detach().cpu()
         max_values = torch.max(probs, dim=1)
         probs = max_values.values.tolist()
         preds = max_values.indices.tolist()
@@ -100,21 +141,13 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
     least_conf_class = df[df['class'] == least_conf].sort_values(by='avg_conf')
 
     n_transfer = min(n_transfer, len(least_conf_class))
-    least_conf_pids = least_conf_class.index[:n_transfer]
 
-
-
-    al_train = pd.read_csv(os.path.join(root, 'AL_train_update.csv'))
-    al_valid = pd.read_csv(os.path.join(root, 'AL_valid_update.csv'))
-
-    transfer_rows = al_valid[al_valid['ID'].isin(least_conf_pids)]
-    al_train = pd.concat([al_train, transfer_rows], ignore_index=True) # Move rows to train set
-    al_valid.drop(index=transfer_rows.index, inplace=True)
-
-    assert len(set(al_train['ID'].tolist()).intersection(set(al_valid['ID'].tolist()))) == 0, f'Found overlap in train and validation set!!'
-
-    al_train.to_csv(os.path.join(root, 'AL_train_update.csv'), index=False)
-    al_valid.to_csv(os.path.join(root, 'AL_valid_update.csv'), index=False)
+    if n_transfer == 0:
+        # Duplicate one current entry
+        oversample(root, least_conf)
+    else:
+        # Transfer k from valid to train
+        undersample(root, least_conf_class.index[:n_transfer])
 
 
 ####################################
@@ -122,7 +155,12 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
 torch.manual_seed(69)
 
 root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-dst = 'figures/AL2'
+dst = 'figures/AL_oversample'
+
+if not os.path.exists(dst):
+    os.mkdir(dst)
+else:
+    raise OSError(f'Directory {dst} already exists')
 
 dim = 299
 al_iter = 10
@@ -136,10 +174,8 @@ for i in range(al_iter):
     print(f"STARTING AL ITERATION {i}")
     print(f"-------------------------")
 
-    if not os.path.exists(f'{dst}/iter_{i}'):
-        os.mkdir(os.path.join(dst, f'iter_{i}'))
-    else:
-        raise OSError(f'Directory iter_{i} already exists')
+    os.mkdir(os.path.join(dst, f'iter_{i}'))
+
 
     train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_train_update.csv'), oversample=False, dim=dim, binary=False)
     test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)

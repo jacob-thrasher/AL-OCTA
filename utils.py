@@ -2,7 +2,7 @@ import torch
 import torchmetrics.functional as tmf
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, f1_score
 from tqdm import tqdm
 
 
@@ -26,7 +26,7 @@ def train_step(model, dataloader, loss_fn, optim, device):
 
     return running_loss / len(dataloader)
 
-def test_step(model, dataloader, loss_fn, device):
+def test_step(model, dataloader, loss_fn, device, average='micro'):
     model.eval()
 
     running_loss = 0
@@ -42,8 +42,8 @@ def test_step(model, dataloader, loss_fn, device):
         running_loss += loss.item()
 
         pred = torch.argmax(pred, dim=1)
-        acc += tmf.accuracy(pred, y, task='multiclass', num_classes=4, average='weighted').item()
-        f1 += tmf.f1_score(pred, y, task='multiclass', num_classes=4, average='weighted').item()
+        acc += tmf.accuracy(pred, y, task='multiclass', num_classes=4, average=average).item()
+        f1 += tmf.f1_score(pred, y, task='multiclass', num_classes=4, average=average).item()
 
     return running_loss / len(dataloader), acc / len(dataloader), f1 / len(dataloader)
 
