@@ -66,7 +66,7 @@ for epoch in range(epochs):
     print(f'Epoch: {[epoch]}/{[epochs]}')
 
     train_loss = train_step(model, train_dataloader, loss_fn, optim, device)
-    valid_loss, acc, f1 = test_step(model, test_dataloader, loss_fn, device)
+    valid_loss, acc, f1 = test_step(model, test_dataloader, loss_fn, device, average='macro')
 
     train_losses.append(train_loss)
     valid_losses.append(valid_loss)

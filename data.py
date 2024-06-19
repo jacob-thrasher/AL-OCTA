@@ -1,6 +1,7 @@
 import os
 import torch
 import pandas as pd
+import torchvision.transforms as T
 from torchvision.transforms import v2
 from PIL import Image
 from torch.utils.data import Dataset
@@ -46,23 +47,20 @@ class OCTA500(Dataset):
         }
         self.binary = binary
 
-        # self.process = v2.Compose([
-        #     # T.RandomEqualize(), # NOT IN ORIGINAL PIPELINE
-        #     T.ToTensor(),
-        #     T.Normalize((0), (1)),
-        #     T.CenterCrop((dim, dim)),
-        #     # T.RandomCrop((int(dim*random_crop_ratio)), (int(dim*random_crop_ratio))),
-        #     # T.Resize((dim, dim)),
-        #     T.RandomHorizontalFlip(),
-        # ])
-
         self.process = v2.Compose([
-                            v2.ToImage(),
-                            v2.ToDtype(torch.float32, scale=True),
-                            v2.RGB(),
-                            v2.CenterCrop(dim),
-                            v2.AutoAugment()
-                        ])
+            T.ToTensor(),
+            T.Normalize((0), (1)),
+            T.CenterCrop((dim, dim)),
+            T.RandomHorizontalFlip(),
+        ])
+
+        # self.process = v2.Compose([
+        #                     v2.ToImage(),
+        #                     v2.ToDtype(torch.float32, scale=True),
+        #                     v2.RGB(),
+        #                     v2.CenterCrop(dim),
+        #                     v2.AutoAugment()
+        #                 ])
     
     def __len__(self):
         return len(self.elements)

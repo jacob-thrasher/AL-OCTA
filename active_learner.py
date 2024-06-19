@@ -3,6 +3,7 @@ import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import shutil
 from tqdm import tqdm
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from torch.optim import Adam, RMSprop, SGD
@@ -13,9 +14,52 @@ from utils import train_step, test_step
 from collections import OrderedDict
 from temp_scaling import ModelWithTemperature
 
-def undersample(root, pids):
-    al_train = pd.read_csv(os.path.join(root, 'AL_train_update.csv'))
-    al_valid = pd.read_csv(os.path.join(root, 'AL_valid_update.csv'))
+# Note: I am aware this code is garbage, but it works... so...
+def compute_uncertainty_scores(logits, method):
+    '''
+    Computes uncertainty scores, where higher values indicate higher uncertainty
+
+    Args:
+        logits: Model outputs (no softmax)
+        method: Uncertainty calculation method, where:
+                'least' = least confidence 
+                'entropy' = entropy sampling
+    '''
+    assert method in ['least', 'entropy', 'margin', 'ratio'], f'Expexted parameter method to be in [least, entropy, margin, ratio], got {method}'
+
+    # Apply softmax function
+    probs = nn.functional.softmax(logits, dim=1)
+    n_classes = probs.size()[1]
+    max_values = torch.max(probs, dim=1)
+    pred_class = max_values.indices
+
+    if method == 'least': # Least confidence
+        max_probs = max_values.values
+        s = (1 - max_probs) * (n_classes / (n_classes-1))
+
+    elif method == 'entropy':
+        s = -torch.sum(probs * torch.log2(probs), dim=1) / torch.log2(torch.tensor(n_classes))
+
+    elif method == 'margin':
+        top2 = torch.topk(probs, 2, dim=1)
+        s = 1 - (top2[:, 0] - top2[:, 1])
+
+    elif method == 'ratio':
+        top2 = torch.topk(probs, 2, dim=1)
+        s = top2[:, 0] / top2[:, 1]
+
+    return s.tolist(), pred_class.tolist()
+
+def undersample(path, pids):
+    '''
+    Undersamples datasets by transferring pids from validation set to training set
+
+    Args:
+        path: path to load/save csvs
+        pids: list of pids to transfer
+    '''
+    al_train = pd.read_csv(os.path.join(path, 'train.csv'))
+    al_valid = pd.read_csv(os.path.join(path, 'valid.csv'))
 
     transfer_rows = al_valid[al_valid['ID'].isin(pids)]
     al_train = pd.concat([al_train, transfer_rows], ignore_index=True) # Move rows to train set
@@ -23,10 +67,13 @@ def undersample(root, pids):
 
     assert len(set(al_train['ID'].tolist()).intersection(set(al_valid['ID'].tolist()))) == 0, f'Found overlap in train and validation set!!'
 
-    al_train.to_csv(os.path.join(root, 'AL_train_update.csv'), index=False)
-    al_valid.to_csv(os.path.join(root, 'AL_valid_update.csv'), index=False)
+    al_train.to_csv(os.path.join(path, 'train.csv'), index=False)
+    al_valid.to_csv(os.path.join(path, 'valid.csv'), index=False)
 
-def oversample(root, least_conf_class):
+def oversample(path, least_conf_class):
+    '''
+    Oversamples datasets
+    '''
     class_lookup = {
         '0': 'NORMAL',
         '1': 'AMD',
@@ -35,7 +82,7 @@ def oversample(root, least_conf_class):
     }
     disease = class_lookup[str(least_conf_class)]
 
-    al_train = pd.read_csv(os.path.join(root, 'AL_train_update.csv'))
+    al_train = pd.read_csv(os.path.join(path, 'train.csv'))
     subjects = al_train[al_train['Disease'] == disease]
     subjects = subjects[~subjects.duplicated(keep=False)] # Drop already oversampled subjects
 
@@ -44,12 +91,23 @@ def oversample(root, least_conf_class):
     selected = subjects.sample()
 
     al_train = pd.concat([al_train, selected], ignore_index=True)
-    al_train.to_csv(os.path.join(root, 'AL_train_update.csv'), index=False)
+    al_train.to_csv(os.path.join(path, 'train.csv'), index=False)
 
 
 
 
-def update_splits(root, model_path, n_transfer=2, device='cuda'):
+def update_splits(valid_path, model_path, n_transfer=2, device='cuda', uncertainty='least'):
+    '''
+    Performs uncertainty calculations and updates train/validation csvs with most difficult subjects
+
+    Args:
+        validpath: path to validation dataset
+        model_path: path to model TODO: Refactor to infer model ppath from valid_path
+        n_transfer: number of subjects to transfer
+        device: operating device
+        uncertainty: method for computing uncertainty
+    '''
+
     print('\nUpdating splits....')
     # Load best model
     model = torch.hub.load('pytorch/vision:v0.10.0', 'inception_v3', pretrained=True)
@@ -68,13 +126,11 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
     model.to(device)
     model.eval()
 
-    valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_valid_update.csv'), dim=dim, binary=False)
-    test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)
+    valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(valid_path, 'valid.csv'), dim=dim, binary=False)
     valid_dataloader = DataLoader(valid_dataset, batch_size=32, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
 
-    scaled_model = ModelWithTemperature(model)
-    scaled_model.set_temperature(test_dataloader)
+    # scaled_model = ModelWithTemperature(model)
+    # scaled_model.set_temperature(test_dataloader)
 
     class_conf = {
         '0': {
@@ -103,12 +159,9 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
 
         out = model(X)
 
-        probs = nn.functional.softmax(out / scaled_model.temperature, dim=1).detach().cpu()
-        max_values = torch.max(probs, dim=1)
-        probs = max_values.values.tolist()
-        preds = max_values.indices.tolist()
+        scores, preds = compute_uncertainty_scores(out, method=uncertainty)
 
-        for c, p, _id, label in zip(preds, probs, pid, y):
+        for c, p, _id, label in zip(preds, scores, pid, y):
             class_conf[str(c)]['sum_conf'] += p
             class_conf[str(c)]['n_samp'] += 1
 
@@ -131,7 +184,7 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
         avg_conf = class_conf[key]['sum_conf'] / class_conf[key]['n_samp'] 
         avg_confidences.append(avg_conf)
 
-    least_conf = np.argmin(np.array(avg_confidences))
+    least_conf = np.argmax(np.array(avg_confidences)) # Get highest class with *highest* uncertainty score
 
     for key in pid_conf:
         pid_conf[key]['avg_conf'] = pid_conf[key]['sum_conf'] / pid_conf[key]['n_samp']
@@ -142,23 +195,29 @@ def update_splits(root, model_path, n_transfer=2, device='cuda'):
 
     n_transfer = min(n_transfer, len(least_conf_class))
 
-    if n_transfer == 0:
-        # Duplicate one current entry
-        oversample(root, least_conf)
-    else:
+    # if n_transfer == 0:
+    #     # Duplicate one current entry
+    #     oversample(root, least_conf)
+    # else:
         # Transfer k from valid to train
-        undersample(root, least_conf_class.index[:n_transfer])
+        # undersample(root, least_conf_class.index[:n_transfer])
 
+    undersample(valid_path, least_conf_class.index[:n_transfer])
 
 ####################################
 
 torch.manual_seed(69)
 
 root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-dst = 'figures/AL_oversample'
+exp_name = 'AL_entropy'
+dst = os.path.join('figures', exp_name)
+uncertainty = 'entropy'
 
 if not os.path.exists(dst):
+    # Prep files (altered AL csvs are saved for further analysis if necessary)
     os.mkdir(dst)
+    shutil.copy(os.path.join(root, 'AL_train.csv'), os.path.join(dst, f'train.csv'))
+    shutil.copy(os.path.join(root, 'AL_valid.csv'), os.path.join(dst, f'valid.csv'))
 else:
     raise OSError(f'Directory {dst} already exists')
 
@@ -169,6 +228,8 @@ lr = 2e-5
 epochs = 5
 
 
+
+al_f1s = []
 for i in range(al_iter):
     print(f"\n-------------------------")
     print(f"STARTING AL ITERATION {i}")
@@ -177,7 +238,7 @@ for i in range(al_iter):
     os.mkdir(os.path.join(dst, f'iter_{i}'))
 
 
-    train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_train_update.csv'), oversample=False, dim=dim, binary=False)
+    train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(dst,  f'train.csv'), oversample=False, dim=dim, binary=False)
     test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)
 
     train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
@@ -205,7 +266,7 @@ for i in range(al_iter):
         print(f'Epoch: {[epoch]}/{[epochs]}')
 
         train_loss = train_step(model, train_dataloader, loss_fn, optim, device)
-        valid_loss, acc, f1 = test_step(model, test_dataloader, loss_fn, device)
+        valid_loss, acc, f1 = test_step(model, test_dataloader, loss_fn, device, average='macro')
 
         train_losses.append(train_loss)
         valid_losses.append(valid_loss)
@@ -224,7 +285,7 @@ for i in range(al_iter):
         print('F1:', f1)
 
 
-        
+        # Plotting
         plt.plot(train_losses, color='blue', label='Train')
         plt.plot(valid_losses, color='orange', label='Valid')
         plt.title('Train and validation loss')
@@ -241,10 +302,22 @@ for i in range(al_iter):
         plt.savefig(f'{dst}/iter_{i}/acc_f1.png')
         plt.close()
 
+    # Post training metrics and plotting
     print('-----------')
     print("Best Acc:", best_acc)
     print("Best F1 :", best_f1)
-    update_splits(root, f'{dst}/iter_{i}/best_model.pt', device=device, n_transfer=n_transfer)
+    al_f1s.append(best_f1)
+
+    plt.plot(al_f1s, color='red', label='f1')
+    plt.title('Best f1 over active learning iterations')
+    plt.xlabel('AL iter')
+    plt.legend()
+    plt.savefig(f'{dst}/f1s.png')
+    plt.close()
+
+    # Active Learning step
+    update_splits(dst, f'{dst}/iter_{i}/best_model.pt', device=device, n_transfer=n_transfer, uncertainty=uncertainty)
+
 
 
 
