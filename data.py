@@ -6,7 +6,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 class OCTA500(Dataset):
-    def __init__(self, root, csvpath, dim=224, random_crop_ratio=.75, oversample=False, split=None, binary=False):
+    def __init__(self, root, csvpath, dim=224, random_crop_ratio=.75, oversample=None, split=None, binary=False):
         '''
         Args:
             root (path): path to image root
@@ -34,8 +34,8 @@ class OCTA500(Dataset):
                 entries.append((int(row.ID), j))
 
             # If oversample, double diseased entries in list
-            if oversample and row.Disease != 'NORMAL': 
-                entries = entries * 2
+            if oversample and row.Disease in ['AMD', 'CNV']: 
+                entries = entries * oversample
             self.elements += entries
                 
         self.label_map = {
@@ -57,6 +57,7 @@ class OCTA500(Dataset):
         # ])
 
         self.process = v2.Compose([
+                            # v2.AugMix(),
                             v2.ToImage(),
                             v2.ToDtype(torch.float32, scale=True),
                             v2.RGB(),

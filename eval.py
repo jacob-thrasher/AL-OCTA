@@ -14,15 +14,15 @@ from collections import OrderedDict
 
 torch.manual_seed(69)
 
-path = 'figures/AL_oversample/iter_9'
+path = 'figures/AugMix_oversample2'
 average = 'macro'
 dim = 299
 pretrained_model_path = os.path.join(path, 'best_model.pt')
 
 
-root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
+root = '/users/jdt0025/scratch/OCTA_3mm'
 
-test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)
+test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'test.csv'), dim=dim, binary=False)
 
 batch_size = 64
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
@@ -52,9 +52,9 @@ loss_fn = nn.CrossEntropyLoss()
 _, acc, f1 = test_step(model, test_dataloader, loss_fn, device, average=average)
 print(acc, f1)
 
-create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm.png'), device, normalize=None)
-create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm_recall.png'), device, normalize='true')
-create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm_prec.png'), device, normalize='pred')
+# create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm.png'), device, normalize=None)
+# create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm_recall.png'), device, normalize='true')
+# create_confusion_matix(model, test_dataloader, ['Normal', 'AMD', 'CNV', 'DR'], os.path.join(path, 'cm_prec.png'), device, normalize='pred')
 
 # plt.hist(arr, bins=100)
 # plt.show()

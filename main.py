@@ -13,7 +13,7 @@ from network import SimpleCNN
 
 torch.manual_seed(69)
 
-exp_id = 'AutoAug'
+exp_id = 'AugMix_oversample3_test'
 dim = 299
 model_name = 'inception_v3'
 
@@ -22,8 +22,8 @@ if not os.path.exists(f'figures/{exp_id}'):
 else:
     raise OSError(f'Directory {exp_id} already exists')
 
-root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'train.csv'), oversample=False, dim=dim, binary=False)
+root = '/users/jdt0025/scratch/OCTA_3mm'
+train_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'train.csv'), oversample=3, dim=dim, binary=False)
 valid_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'valid.csv'), dim=dim, binary=False)
 test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'test.csv'), dim=dim, binary=False)
 

@@ -32,7 +32,7 @@ def test_step(model, dataloader, loss_fn, device, average='micro'):
     running_loss = 0
     acc = 0
     f1 = 0
-    for X, y, _ in tqdm(dataloader):
+    for X, y, _ in tqdm(dataloader, disable=True):
         X = X.to(device)
         y = y.to(device)
 
