@@ -14,7 +14,7 @@ from collections import OrderedDict
 
 torch.manual_seed(69)
 
-path = 'figures/AL_new-LCUS/iter_5'
+path = 'figures/AL4-1/iter_2'
 average = 'macro'
 dim = 299
 pretrained_model_path = os.path.join(path, 'best_model.pt')

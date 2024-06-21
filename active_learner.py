@@ -15,7 +15,7 @@ from collections import OrderedDict
 from temp_scaling import ModelWithTemperature
 
 # Note: I am aware this code is garbage, but it works... so...
-def compute_uncertainty_scores(logits, method):
+def compute_uncertainty_scores(logits, method, temperature=1):
     '''
     Computes uncertainty scores, where higher values indicate higher uncertainty
 
@@ -28,14 +28,15 @@ def compute_uncertainty_scores(logits, method):
     assert method in ['least', 'entropy', 'margin', 'ratio'], f'Expexted parameter method to be in [least, entropy, margin, ratio], got {method}'
 
     # Apply softmax function
-    probs = nn.functional.softmax(logits, dim=1)
+    probs = nn.functional.softmax(logits/temperature, dim=1)
     n_classes = probs.size()[1]
     max_values = torch.max(probs, dim=1)
     pred_class = max_values.indices
 
     if method == 'least': # Least confidence
         max_probs = max_values.values
-        s = (1 - max_probs) * (n_classes / (n_classes-1))
+        # s = (1 - max_probs) * (n_classes / (n_classes-1))
+        s = 1 - max_probs
 
     elif method == 'entropy':
         s = -torch.sum(probs * torch.log2(probs), dim=1) / torch.log2(torch.tensor(n_classes))
@@ -159,7 +160,7 @@ def update_splits(valid_path, model_path, n_transfer=2, device='cuda', uncertain
 
         out = model(X)
 
-        scores, preds = compute_uncertainty_scores(out, method=uncertainty)
+        scores, preds = compute_uncertainty_scores(out, method=uncertainty, temperature=1)
 
         for c, p, _id, label in zip(preds, scores, pid, y):
             class_conf[str(c)]['sum_conf'] += p
@@ -191,7 +192,7 @@ def update_splits(valid_path, model_path, n_transfer=2, device='cuda', uncertain
 
 
     df = pd.DataFrame(pid_conf).T
-    least_conf_class = df[df['class'] == least_conf].sort_values(by='avg_conf')
+    least_conf_class = df[df['class'] == least_conf].sort_values(by='avg_conf', ascending=False)
 
     n_transfer = min(n_transfer, len(least_conf_class))
 
@@ -204,14 +205,17 @@ def update_splits(valid_path, model_path, n_transfer=2, device='cuda', uncertain
 
     undersample(valid_path, least_conf_class.index[:n_transfer])
 
+
+
+
 ####################################
 
 torch.manual_seed(69)
 
 root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-exp_name = 'AL_entropy'
+exp_name = 'AL7'
 dst = os.path.join('figures', exp_name)
-uncertainty = 'entropy'
+uncertainty = 'least'
 
 if not os.path.exists(dst):
     # Prep files (altered AL csvs are saved for further analysis if necessary)
