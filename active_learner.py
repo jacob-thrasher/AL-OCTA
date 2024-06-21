@@ -28,7 +28,7 @@ def compute_uncertainty_scores(logits, method, temperature=1):
     assert method in ['least', 'entropy', 'margin', 'ratio'], f'Expexted parameter method to be in [least, entropy, margin, ratio], got {method}'
 
     # Apply softmax function
-    probs = nn.functional.softmax(logits/temperature, dim=1)
+    probs = nn.functional.softmax(logits, dim=1)
     n_classes = probs.size()[1]
     max_values = torch.max(probs, dim=1)
     pred_class = max_values.indices
@@ -42,12 +42,12 @@ def compute_uncertainty_scores(logits, method, temperature=1):
         s = -torch.sum(probs * torch.log2(probs), dim=1) / torch.log2(torch.tensor(n_classes))
 
     elif method == 'margin':
-        top2 = torch.topk(probs, 2, dim=1)
+        top2 = torch.topk(probs, 2, dim=1).values
         s = 1 - (top2[:, 0] - top2[:, 1])
 
     elif method == 'ratio':
-        top2 = torch.topk(probs, 2, dim=1)
-        s = top2[:, 0] / top2[:, 1]
+        top2 = torch.topk(probs, 2, dim=1).values
+        s = -(top2[:, 0] / top2[:, 1])
 
     return s.tolist(), pred_class.tolist()
 
@@ -212,10 +212,10 @@ def update_splits(valid_path, model_path, n_transfer=2, device='cuda', uncertain
 
 torch.manual_seed(69)
 
-root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
-exp_name = 'AL7'
+root = '/users/jdt0025/scratch/OCTA_3mm'
+exp_name = 'ratio'
 dst = os.path.join('figures', exp_name)
-uncertainty = 'least'
+uncertainty = 'ratio'
 
 if not os.path.exists(dst):
     # Prep files (altered AL csvs are saved for further analysis if necessary)

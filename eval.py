@@ -14,13 +14,13 @@ from collections import OrderedDict
 
 torch.manual_seed(69)
 
-path = 'figures/AL4-1/iter_2'
+path = 'figures/margin/iter_6'
 average = 'macro'
 dim = 299
 pretrained_model_path = os.path.join(path, 'best_model.pt')
 
 
-root = 'D:\\Big_Data\\OCTA500\\OCTA\\OCTA_3mm'
+root = '/users/jdt0025/scratch/OCTA_3mm'
 
 test_dataset = OCTA500(os.path.join(root, 'OCTA'), csvpath=os.path.join(root, 'AL_test.csv'), dim=dim, binary=False)
 
