@@ -7,37 +7,47 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 class OCTA500(Dataset):
-    def __init__(self, root, csvpath, dim=224, random_crop_ratio=.75, oversample=False, split=None, binary=False):
+    def __init__(self, root, csvpath, dim=224, oversample=False, split=None, binary=False, df_style='subject'):
         '''
         Args:
             root (path): path to image root
             csvpath (path): path to csv file containing label information
 
         Keyword Args:
-            dim (int): Image dimension
-            random_crop_ratio (float): Ratio of dim arg to randomly crop image
+            dim        (int) : Image dimension, Default: 224
+            oversample (bool): Oversample minority classes? Default: False
+            split      (str) : Load only selected disease, Default: None
+                                Should be one of: [NORMAL, CNV, DR, AMD]
+            binary     (bool): Lump all diseased eyes to one class for binary classification, Default: False
+            df_style   (str) : Inidcates which dataframe is being loaded. Subject style only contains subject
+                                level information, while Instance style has one row per image.
+                                Instance style dfs should contain an additional "Instance" column which contains
+                                the image ID associated with the subject ID
+                                Should be one of [subject, instance]
         '''
         self.root = root
+        self.df_style = df_style
         self.df = pd.read_csv(csvpath)
         self.df = self.df.dropna(how='all')
 
         if split:
-            if split == 'NORMAL':
-                self.df = self.df[self.df['Disease'] == 'NORMAL']
-            else:
-                self.df = self.df[self.df['Disease'] != 'NORMAL']
+            self.df = self.df[self.df['Disease'] == split]
 
-        # There is def a better way to do this but I can't be bothered rn
-        self.elements = []
-        for i, row in self.df.iterrows():
-            entries = []
-            for j in range(1, 305):
-                entries.append((int(row.ID), j))
 
-            # If oversample, double diseased entries in list
-            if oversample and row.Disease != 'NORMAL': 
-                entries = entries * 2
-            self.elements += entries
+        # Construct list of (ID, instance) tuples from df.
+        if df_style == 'subject': # TODO: Clean subject style loading
+            self.elements = []
+            for i, row in self.df.iterrows():
+                entries = []
+                for j in range(1, 305):
+                    entries.append((int(row.ID), j))
+
+                # If oversample, double diseased entries in list
+                if oversample and row.Disease != 'NORMAL': 
+                    entries = entries * 2
+                self.elements += entries
+        elif df_style == 'instance':
+            self.elements = list(zip(self.df['ID'].tolist(), self.df['Instance'].tolist()))
                 
         self.label_map = {
             'NORMAL': 0,
@@ -75,7 +85,10 @@ class OCTA500(Dataset):
         else:
             label = self.label_map[disease]
 
-        pid = self.df[self.df['ID'] == _id].iloc[0].ID
+
+        if self.df_style == 'subject':
+            pid = self.df[self.df['ID'] == _id].iloc[0].ID 
+        elif self.df_style == 'instance':
+            pid = str(_id) + 'S' + str(img_idx)
 
         return self.process(img).repeat(3, 1, 1), label, pid
-        # return img, label
