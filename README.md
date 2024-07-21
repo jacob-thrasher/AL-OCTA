@@ -9,7 +9,7 @@ Figure: Schematic diagram of active learning pipeline, where $`\mathcal{D}_{trai
 
 ## Dataset
 
-We utilize the OCTA500 dataset, which contains images of healthy, age-related macular degeneration (AMD), chorodial neovascularization (CNV), and diabetic retinopathy (DR) retinas. More details can be found link[here](https://arxiv.org/abs/2012.07261)
+We utilize the OCTA500 dataset, which contains images of healthy, age-related macular degeneration (AMD), chorodial neovascularization (CNV), and diabetic retinopathy (DR) retinas. More details can be found link [here](https://arxiv.org/abs/2012.07261)
 
 <p align="center">
   <img src="images/OCTA3.jpg" width="700">
