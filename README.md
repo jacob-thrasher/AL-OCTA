@@ -1,6 +1,6 @@
 # OCTA500-classification
 
-This repository contains supplementary code for link[Enhancing Retinal Disease Classification from OCTA Images via Active Learning Techniques](), published in Data Engineering in Medical Imaging (DEMI) workshop at MICCAI 2024. In this work, we analyze active learning as a data subset technique to improve classification performance on OCTA images.
+This repository contains supplementary code for link[Enhancing Retinal Disease Classification from OCTA Images via Active Learning Techniques](https://arxiv.org/abs/2407.15293), published in Data Engineering in Medical Imaging (DEMI) workshop at MICCAI 2024. In this work, we analyze active learning as a data subset technique to improve classification performance on OCTA images.
 
 <p align="center">
   <img src="images/AL5.jpg" width="700">
